@@ -1,0 +1,709 @@
+<!DOCTYPE html>
+<html lang="en" class="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="theme-color" content="#3B82F6">
+  <meta name="description" content="Focus Time - Professional Pomodoro Tracker">
+  <title>Focus Time</title>
+  
+  <!-- PWA Manifest -->
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" type="image/jpeg" href="icon-192.jpg">
+  <link rel="apple-touch-icon" href="icon-192.jpg">
+
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            primary: 'var(--primary)',
+            'primary-bg': 'var(--primary-bg)',
+            surface: 'var(--surface)',
+            'surface-dark': 'var(--surface-dark)'
+          }
+        }
+      }
+    }
+  </script>
+
+  <!-- FontAwesome -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+  <style>
+    :root {
+      --primary: #3B82F6;
+      --primary-bg: #EFF6FF;
+      --surface: #FFFFFF;
+      --surface-dark: #111111;
+    }
+    .dark {
+      --primary: var(--primary-dark, #60A5FA);
+      --primary-bg: var(--primary-bg-dark, #1E3A8A);
+      --surface: #000000;
+      --surface-dark: #111111;
+    }
+    
+    /* Smooth transitions */
+    body { transition: background-color 0.3s ease, color 0.3s ease; }
+    
+    /* Custom Scrollbar */
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: #CBD5E1; border-radius: 3px; }
+    .dark ::-webkit-scrollbar-thumb { background: #334155; }
+
+    /* Fullscreen Pomodoro View */
+    #pomodoro-view:fullscreen {
+      display: flex !important;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      width: 100vw;
+      height: 100vh;
+      z-index: 9999;
+      padding: 2rem;
+    }
+    #pomodoro-view:fullscreen .hide-in-fullscreen { display: none !important; }
+    
+    .progress-ring__circle {
+      transition: stroke-dashoffset 0.5s ease-in-out;
+      transform: rotate(-90deg);
+      transform-origin: 50% 50%;
+    }
+  </style>
+</head>
+<body class="bg-gray-50 dark:bg-black text-gray-800 dark:text-gray-100 min-h-screen flex flex-col md:flex-row">
+
+  <!-- First Time Setup Modal -->
+  <div id="setup-modal" class="fixed inset-0 bg-black bg-opacity-60 z-[100] flex items-center justify-center p-4 hidden backdrop-blur-sm">
+    <div class="bg-white dark:bg-neutral-900 rounded-2xl shadow-2xl max-w-md w-full overflow-hidden border border-gray-200 dark:border-gray-800">
+      <img src="https://i.postimg.cc/5yCm4qhh/From-Klickpin-com-66-Stunning-Date-Night-Outfit-Ideas-pin-id-671880838168106728.gif" alt="Welcome" class="w-full h-48 object-cover">
+      <div class="p-6">
+        <h2 class="text-2xl font-bold mb-2">Welcome to Focus Time</h2>
+        <p class="text-gray-600 dark:text-gray-400 mb-4 text-sm">Let's set up your daily schedule. Your study day will be calculated as a 24-hour period starting from this time.</p>
+        
+        <label class="block text-sm font-semibold mb-1">Day Start Time</label>
+        <input type="time" id="setup-reset-time" value="16:00" class="w-full p-3 border border-gray-300 dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-black text-gray-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary mb-2">
+        <p class="text-xs text-gray-500 mb-4"><i class="fa-solid fa-circle-info mr-1"></i> Ends next day at the same time (24 hours)</p>
+        
+        <button onclick="completeSetup()" class="w-full py-3 rounded-lg text-white font-semibold transition-all hover:opacity-90" style="background-color: var(--primary)">
+          Get Started
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Desktop Sidebar / Mobile Bottom Nav -->
+  <nav class="hide-in-fullscreen fixed bottom-0 left-0 right-0 bg-white dark:bg-black border-t border-gray-200 dark:border-gray-800 md:left-0 md:top-0 md:bottom-0 md:w-64 md:border-r md:border-t-0 z-50 flex md:flex-col justify-around md:justify-start md:p-6">
+    <div class="hidden md:flex items-center gap-3 mb-8 px-2">
+      <i class="fa-solid fa-clock text-2xl" style="color: var(--primary)"></i>
+      <span class="text-xl font-bold tracking-tight">Focus Time</span>
+    </div>
+    
+    <button onclick="showView('dashboard')" class="nav-btn flex flex-col md:flex-row items-center md:gap-3 p-3 md:px-4 md:py-3 rounded-xl text-gray-500 dark:text-gray-400 hover:bg-primary-bg dark:hover:bg-opacity-20 transition-all active-nav" data-view="dashboard">
+      <i class="fa-solid fa-chart-line text-xl mb-1 md:mb-0"></i>
+      <span class="text-xs md:text-sm font-medium">Dashboard</span>
+    </button>
+    <button onclick="showView('pomodoro')" class="nav-btn flex flex-col md:flex-row items-center md:gap-3 p-3 md:px-4 md:py-3 rounded-xl text-gray-500 dark:text-gray-400 hover:bg-primary-bg dark:hover:bg-opacity-20 transition-all" data-view="pomodoro">
+      <i class="fa-solid fa-clock text-xl mb-1 md:mb-0"></i>
+      <span class="text-xs md:text-sm font-medium">Pomodoro</span>
+    </button>
+    <button onclick="showView('statistics')" class="nav-btn flex flex-col md:flex-row items-center md:gap-3 p-3 md:px-4 md:py-3 rounded-xl text-gray-500 dark:text-gray-400 hover:bg-primary-bg dark:hover:bg-opacity-20 transition-all" data-view="statistics">
+      <i class="fa-solid fa-calendar-days text-xl mb-1 md:mb-0"></i>
+      <span class="text-xs md:text-sm font-medium">Statistics</span>
+    </button>
+    <button onclick="showView('settings')" class="nav-btn flex flex-col md:flex-row items-center md:gap-3 p-3 md:px-4 md:py-3 rounded-xl text-gray-500 dark:text-gray-400 hover:bg-primary-bg dark:hover:bg-opacity-20 transition-all" data-view="settings">
+      <i class="fa-solid fa-gear text-xl mb-1 md:mb-0"></i>
+      <span class="text-xs md:text-sm font-medium">Settings</span>
+    </button>
+  </nav>
+
+  <!-- Main Content -->
+  <main class="flex-1 mb-16 md:ml-64 p-4 md:p-8 min-h-screen flex flex-col">
+    
+    <!-- Header -->
+    <header class="hide-in-fullscreen flex justify-between items-center mb-6">
+      <h1 id="page-title" class="text-2xl font-bold">Dashboard</h1>
+      <div class="flex gap-2">
+        <button onclick="toggleDarkMode()" class="p-2 rounded-lg bg-gray-200 dark:bg-neutral-800 hover:bg-gray-300 dark:hover:bg-neutral-700 transition-colors">
+          <i class="fa-solid fa-moon dark:hidden"></i>
+          <i class="fa-solid fa-sun hidden dark:block text-yellow-400"></i>
+        </button>
+      </div>
+    </header>
+
+    <!-- Views -->
+    <div class="flex-1">
+      <!-- Dashboard View -->
+      <div id="dashboard-view" class="view-section space-y-6">
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div class="bg-white dark:bg-neutral-900 p-6 rounded-2xl border border-gray-200 dark:border-gray-800 shadow-sm">
+            <div class="flex items-center gap-3 mb-2">
+              <div class="p-2 rounded-lg bg-primary-bg dark:bg-opacity-20" style="color: var(--primary)">
+                <i class="fa-solid fa-fire"></i>
+              </div>
+              <span class="text-sm font-medium text-gray-500 dark:text-gray-400">Avg. Daily Study</span>
+            </div>
+            <p id="avg-time" class="text-3xl font-bold">0h 0m</p>
+          </div>
+          <div class="bg-white dark:bg-neutral-900 p-6 rounded-2xl border border-gray-200 dark:border-gray-800 shadow-sm">
+            <div class="flex items-center gap-3 mb-2">
+              <div class="p-2 rounded-lg bg-primary-bg dark:bg-opacity-20" style="color: var(--primary)">
+                <i class="fa-solid fa-check-circle"></i>
+              </div>
+              <span class="text-sm font-medium text-gray-500 dark:text-gray-400">Total Sessions</span>
+            </div>
+            <p id="total-sessions" class="text-3xl font-bold">0</p>
+          </div>
+          <div class="bg-white dark:bg-neutral-900 p-6 rounded-2xl border border-gray-200 dark:border-gray-800 shadow-sm">
+            <div class="flex items-center gap-3 mb-2">
+              <div class="p-2 rounded-lg bg-primary-bg dark:bg-opacity-20" style="color: var(--primary)">
+                <i class="fa-solid fa-hourglass-half"></i>
+              </div>
+              <span class="text-sm font-medium text-gray-500 dark:text-gray-400">Today's Focus</span>
+            </div>
+            <p id="today-time" class="text-3xl font-bold">0h 0m</p>
+          </div>
+        </div>
+        
+        <div class="bg-white dark:bg-neutral-900 p-6 rounded-2xl border border-gray-200 dark:border-gray-800 shadow-sm">
+          <h3 class="text-lg font-semibold mb-4">Last 7 Days Activity</h3>
+          <canvas id="dashboardChart" height="100"></canvas>
+        </div>
+      </div>
+
+      <!-- Pomodoro View -->
+      <div id="pomodoro-view" class="view-section hidden flex flex-col items-center justify-center min-h-[60vh]">
+        <div class="flex gap-2 mb-8 bg-gray-200 dark:bg-neutral-800 p-1 rounded-full">
+          <button onclick="setMode('focus')" id="btn-focus" class="px-4 py-2 rounded-full text-sm font-semibold transition-all bg-white dark:bg-neutral-700 shadow-sm">Focus</button>
+          <button onclick="setMode('shortBreak')" id="btn-shortBreak" class="px-4 py-2 rounded-full text-sm font-semibold transition-all text-gray-600 dark:text-gray-400">Short Break</button>
+          <button onclick="setMode('longBreak')" id="btn-longBreak" class="px-4 py-2 rounded-full text-sm font-semibold transition-all text-gray-600 dark:text-gray-400">Long Break</button>
+        </div>
+
+        <div class="relative mb-8">
+          <svg class="w-64 h-64 md:w-80 md:h-80 transform" viewBox="0 0 200 200">
+            <circle cx="100" cy="100" r="90" stroke="currentColor" stroke-width="6" fill="transparent" class="text-gray-200 dark:text-neutral-800" />
+            <circle id="progress-ring" cx="100" cy="100" r="90" stroke="currentColor" stroke-width="6" fill="transparent" class="progress-ring__circle" style="color: var(--primary)" stroke-dasharray="565.48" stroke-dashoffset="0" />
+          </svg>
+          <div class="absolute inset-0 flex flex-col items-center justify-center">
+            <span id="timer-display" class="text-5xl md:text-6xl font-bold tabular-nums tracking-tight">25:00</span>
+            <span id="timer-status" class="text-sm font-medium text-gray-500 dark:text-gray-400 mt-2 uppercase tracking-widest">Ready</span>
+          </div>
+        </div>
+
+        <div class="flex gap-4">
+          <button onclick="toggleTimer()" id="btn-toggle" class="w-16 h-16 rounded-full flex items-center justify-center text-white text-xl shadow-lg transition-transform hover:scale-105 active:scale-95" style="background-color: var(--primary)">
+            <i class="fa-solid fa-play" id="icon-play"></i>
+          </button>
+          <button onclick="resetTimer()" class="w-16 h-16 rounded-full flex items-center justify-center bg-gray-200 dark:bg-neutral-800 text-gray-700 dark:text-gray-300 text-xl shadow-sm transition-transform hover:scale-105 active:scale-95">
+            <i class="fa-solid fa-rotate-right"></i>
+          </button>
+          <button onclick="toggleFullscreen()" class="w-16 h-16 rounded-full flex items-center justify-center bg-gray-200 dark:bg-neutral-800 text-gray-700 dark:text-gray-300 text-xl shadow-sm transition-transform hover:scale-105 active:scale-95 hide-in-fullscreen">
+            <i class="fa-solid fa-expand"></i>
+          </button>
+        </div>
+      </div>
+
+      <!-- Statistics View -->
+      <div id="statistics-view" class="view-section hidden">
+        <div class="bg-white dark:bg-neutral-900 p-6 rounded-2xl border border-gray-200 dark:border-gray-800 shadow-sm">
+          <div class="flex justify-between items-center mb-6">
+            <button onclick="changeMonth(-1)" class="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-neutral-800 transition-colors">
+              <i class="fa-solid fa-chevron-left"></i>
+            </button>
+            <h3 id="calendar-month-year" class="text-lg font-bold"></h3>
+            <button onclick="changeMonth(1)" class="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-neutral-800 transition-colors">
+              <i class="fa-solid fa-chevron-right"></i>
+            </button>
+          </div>
+          <div class="grid grid-cols-7 gap-2 mb-2 text-center text-xs font-semibold text-gray-500 dark:text-gray-400">
+            <div>Sun</div><div>Mon</div><div>Tue</div><div>Wed</div><div>Thu</div><div>Fri</div><div>Sat</div>
+          </div>
+          <div id="calendar-grid" class="grid grid-cols-7 gap-2">
+            <!-- Calendar days injected here -->
+          </div>
+        </div>
+      </div>
+
+      <!-- Settings View -->
+      <div id="settings-view" class="view-section hidden space-y-6">
+        <div class="bg-white dark:bg-neutral-900 p-6 rounded-2xl border border-gray-200 dark:border-gray-800 shadow-sm">
+          <h3 class="text-lg font-semibold mb-4">Theme Colors</h3>
+          <div class="flex gap-4 flex-wrap">
+            <button onclick="applyTheme('blue')" class="w-10 h-10 rounded-full bg-blue-500 ring-2 ring-offset-2 ring-transparent hover:ring-blue-500 transition-all"></button>
+            <button onclick="applyTheme('green')" class="w-10 h-10 rounded-full bg-emerald-500 ring-2 ring-offset-2 ring-transparent hover:ring-emerald-500 transition-all"></button>
+            <button onclick="applyTheme('purple')" class="w-10 h-10 rounded-full bg-violet-500 ring-2 ring-offset-2 ring-transparent hover:ring-violet-500 transition-all"></button>
+            <button onclick="applyTheme('orange')" class="w-10 h-10 rounded-full bg-amber-500 ring-2 ring-offset-2 ring-transparent hover:ring-amber-500 transition-all"></button>
+            <button onclick="applyTheme('rose')" class="w-10 h-10 rounded-full bg-rose-500 ring-2 ring-offset-2 ring-transparent hover:ring-rose-500 transition-all"></button>
+          </div>
+        </div>
+
+        <div class="bg-white dark:bg-neutral-900 p-6 rounded-2xl border border-gray-200 dark:border-gray-800 shadow-sm">
+          <h3 class="text-lg font-semibold mb-4">Session Durations (minutes)</h3>
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div>
+              <label class="block text-xs font-medium text-gray-500 mb-1">Focus</label>
+              <input type="number" id="setting-focus" class="w-full p-2 border border-gray-300 dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-black" value="25">
+            </div>
+            <div>
+              <label class="block text-xs font-medium text-gray-500 mb-1">Short Break</label>
+              <input type="number" id="setting-short" class="w-full p-2 border border-gray-300 dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-black" value="5">
+            </div>
+            <div>
+              <label class="block text-xs font-medium text-gray-500 mb-1">Long Break</label>
+              <input type="number" id="setting-long" class="w-full p-2 border border-gray-300 dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-black" value="15">
+            </div>
+          </div>
+          <button onclick="saveSettings()" class="mt-4 w-full md:w-auto px-6 py-2 rounded-lg text-white font-medium transition-all hover:opacity-90" style="background-color: var(--primary)">
+            Save Durations
+          </button>
+        </div>
+
+        <div class="bg-white dark:bg-neutral-900 p-6 rounded-2xl border border-gray-200 dark:border-gray-800 shadow-sm">
+          <h3 class="text-lg font-semibold mb-4">Data Management</h3>
+          <div class="flex flex-col md:flex-row gap-4">
+            <button onclick="exportData()" class="flex-1 flex items-center justify-center gap-2 p-3 rounded-lg border border-gray-300 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-neutral-800 transition-colors">
+              <i class="fa-solid fa-download"></i> Export JSON
+            </button>
+            <label class="flex-1 flex items-center justify-center gap-2 p-3 rounded-lg border border-gray-300 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-neutral-800 transition-colors cursor-pointer">
+              <i class="fa-solid fa-upload"></i> Import JSON
+              <input type="file" id="import-file" accept=".json" class="hidden" onchange="importData(this)">
+            </label>
+          </div>
+          <button onclick="resetAllData()" class="mt-4 w-full text-red-500 text-sm font-medium hover:underline">
+            Reset All Data & Preferences
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Footer -->
+    <footer class="hide-in-fullscreen mt-auto pt-6 border-t border-gray-200 dark:border-gray-800 text-center pb-20 md:pb-4">
+      <p class="text-sm text-gray-500 dark:text-gray-400 font-medium">Designed by dila</p>
+    </footer>
+  </main>
+
+  <script>
+    // --- Data & State Management ---
+    const DEFAULT_DATA = {
+      initialized: false,
+      dayResetTime: "16:00",
+      themeColor: "blue",
+      darkMode: false,
+      customDurations: { focus: 25, shortBreak: 5, longBreak: 15 },
+      sessions: []
+    };
+
+    let appData = JSON.parse(localStorage.getItem('focusTimeData')) || DEFAULT_DATA;
+    
+    const themes = {
+      blue: { primary: '#3B82F6', bg: '#EFF6FF', darkPrimary: '#60A5FA', darkBg: '#1E3A8A' },
+      green: { primary: '#10B981', bg: '#ECFDF5', darkPrimary: '#34D399', darkBg: '#064E3B' },
+      purple: { primary: '#8B5CF6', bg: '#F5F3FF', darkPrimary: '#A78BFA', darkBg: '#4C1D95' },
+      orange: { primary: '#F59E0B', bg: '#FFFBEB', darkPrimary: '#FBBF24', darkBg: '#78350F' },
+      rose: { primary: '#F43F5E', bg: '#FFF1F2', darkPrimary: '#FB7185', darkBg: '#881337' }
+    };
+
+    function saveData() {
+      localStorage.setItem('focusTimeData', JSON.stringify(appData));
+    }
+
+    // --- Initialization ---
+    function init() {
+      applyTheme(appData.themeColor);
+      if (appData.darkMode) document.documentElement.classList.add('dark');
+      
+      if (!appData.initialized) {
+        document.getElementById('setup-modal').classList.remove('hidden');
+        if ("Notification" in window && Notification.permission === "default") {
+          Notification.requestPermission();
+        }
+      } else {
+        document.getElementById('setup-modal').classList.add('hidden');
+      }
+      
+      showView('dashboard');
+      updateDashboard();
+    }
+
+    function completeSetup() {
+      const resetTime = document.getElementById('setup-reset-time').value;
+      appData.dayResetTime = resetTime;
+      appData.initialized = true;
+      saveData();
+      document.getElementById('setup-modal').classList.add('hidden');
+      if ("Notification" in window && Notification.permission === "default") {
+        Notification.requestPermission();
+      }
+    }
+
+    // --- Theme & UI ---
+    function applyTheme(themeName) {
+      const theme = themes[themeName];
+      document.documentElement.style.setProperty('--primary', theme.primary);
+      document.documentElement.style.setProperty('--primary-bg', theme.bg);
+      document.documentElement.style.setProperty('--primary-dark', theme.darkPrimary);
+      document.documentElement.style.setProperty('--primary-bg-dark', theme.darkBg);
+      appData.themeColor = themeName;
+      saveData();
+      updateDashboard(); // Re-render chart with new color
+    }
+
+    function toggleDarkMode() {
+      appData.darkMode = !appData.darkMode;
+      if (appData.darkMode) {
+        document.documentElement.classList.add('dark');
+      } else {
+        document.documentElement.classList.remove('dark');
+      }
+      saveData();
+    }
+
+    function showView(viewName) {
+      document.querySelectorAll('.view-section').forEach(el => el.classList.add('hidden'));
+      document.getElementById(`${viewName}-view`).classList.remove('hidden');
+      
+      document.querySelectorAll('.nav-btn').forEach(btn => {
+        btn.classList.remove('text-primary', 'bg-primary-bg', 'dark:bg-opacity-20');
+        btn.classList.add('text-gray-500', 'dark:text-gray-400');
+        if (btn.dataset.view === viewName) {
+          btn.classList.add('text-primary', 'bg-primary-bg', 'dark:bg-opacity-20');
+          btn.classList.remove('text-gray-500', 'dark:text-gray-400');
+        }
+      });
+
+      const titles = { dashboard: 'Dashboard', pomodoro: 'Pomodoro Timer', statistics: 'Statistics', settings: 'Settings' };
+      document.getElementById('page-title').textContent = titles[viewName];
+
+      if (viewName === 'dashboard') updateDashboard();
+      if (viewName === 'statistics') renderCalendar();
+      if (viewName === 'settings') loadSettings();
+    }
+
+    // --- Date & Calculation Logic ---
+    function getDayBoundary(date) {
+      const d = new Date(date);
+      const [hours, minutes] = appData.dayResetTime.split(':').map(Number);
+      d.setHours(hours, minutes, 0, 0);
+      if (new Date(date) < d) {
+        d.setDate(d.getDate() - 1);
+      }
+      return d;
+    }
+
+    function getSessionsForDay(date) {
+      const start = getDayBoundary(date);
+      const end = new Date(start);
+      end.setDate(end.getDate() + 1);
+      
+      return appData.sessions.filter(s => {
+        const sDate = new Date(s.startTime);
+        return sDate >= start && sDate < end;
+      });
+    }
+
+    function getTotalMinutesForDay(date) {
+      return getSessionsForDay(date).reduce((acc, s) => acc + s.duration, 0);
+    }
+
+    // --- Dashboard ---
+    let chartInstance = null;
+    function updateDashboard() {
+      const today = new Date();
+      const todayMins = getTotalMinutesForDay(today);
+      document.getElementById('today-time').textContent = `${Math.floor(todayMins / 60)}h ${todayMins % 60}m`;
+      document.getElementById('total-sessions').textContent = appData.sessions.filter(s => s.type === 'focus').length;
+
+      const labels = [];
+      const data = [];
+      let total7Days = 0;
+      
+      for (let i = 6; i >= 0; i--) {
+        const d = new Date();
+        d.setDate(d.getDate() - i);
+        labels.push(d.toLocaleDateString('en-US', { weekday: 'short' }));
+        const mins = getTotalMinutesForDay(d);
+        data.push(mins);
+        total7Days += mins;
+      }
+      
+      document.getElementById('avg-time').textContent = `${Math.floor((total7Days / 7) / 60)}h ${Math.round((total7Days / 7) % 60)}m`;
+
+      const ctx = document.getElementById('dashboardChart').getContext('2d');
+      const primaryColor = getComputedStyle(document.documentElement).getPropertyValue('--primary').trim();
+      
+      if (chartInstance) chartInstance.destroy();
+      
+      chartInstance = new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels: labels,
+          datasets: [{
+            label: 'Study Time (minutes)',
+            data: data,
+            borderColor: primaryColor,
+            backgroundColor: 'transparent',
+            borderWidth: 3,
+            tension: 0.4,
+            pointBackgroundColor: primaryColor,
+            pointRadius: 4,
+            pointHoverRadius: 6
+          }]
+        },
+        options: {
+          responsive: true,
+          plugins: { legend: { display: false } },
+          scales: {
+            y: { beginAtZero: true, grid: { color: 'rgba(128,128,128,0.1)' }, ticks: { color: appData.darkMode ? '#9CA3AF' : '#6B7280' } },
+            x: { grid: { display: false }, ticks: { color: appData.darkMode ? '#9CA3AF' : '#6B7280' } }
+          }
+        }
+      });
+    }
+
+    // --- Pomodoro Timer ---
+    let timerInterval = null;
+    let timeLeft = 0;
+    let totalTime = 0;
+    let isRunning = false;
+    let currentMode = 'focus';
+    let sessionStartTime = null;
+
+    const circle = document.getElementById('progress-ring');
+    const radius = circle.r.baseVal.value;
+    const circumference = radius * 2 * Math.PI;
+    circle.style.strokeDasharray = `${circumference} ${circumference}`;
+    circle.style.strokeDashoffset = circumference;
+
+    function setProgress(percent) {
+      const offset = circumference - (percent / 100) * circumference;
+      circle.style.strokeDashoffset = offset;
+    }
+
+    function setMode(mode) {
+      pauseTimer();
+      currentMode = mode;
+      timeLeft = appData.customDurations[mode] * 60;
+      totalTime = timeLeft;
+      updateTimerDisplay();
+      setProgress(100);
+      
+      document.querySelectorAll('#pomodoro-view button[id^="btn-"]').forEach(btn => {
+        btn.classList.remove('bg-white', 'dark:bg-neutral-700', 'shadow-sm', 'text-gray-900', 'dark:text-white');
+        btn.classList.add('text-gray-600', 'dark:text-gray-400');
+      });
+      const activeBtn = document.getElementById(`btn-${mode}`);
+      activeBtn.classList.add('bg-white', 'dark:bg-neutral-700', 'shadow-sm', 'text-gray-900', 'dark:text-white');
+      activeBtn.classList.remove('text-gray-600', 'dark:text-gray-400');
+      
+      document.getElementById('timer-status').textContent = mode === 'focus' ? 'Focus Time' : 'Break Time';
+    }
+
+    function updateTimerDisplay() {
+      const m = Math.floor(timeLeft / 60).toString().padStart(2, '0');
+      const s = (timeLeft % 60).toString().padStart(2, '0');
+      document.getElementById('timer-display').textContent = `${m}:${s}`;
+      document.title = isRunning ? `${m}:${s} - Focus Time` : 'Focus Time';
+    }
+
+    function toggleTimer() {
+      if (isRunning) {
+        pauseTimer();
+      } else {
+        startTimer();
+      }
+    }
+
+    function startTimer() {
+      if (timeLeft === 0) setMode(currentMode);
+      if (!sessionStartTime) sessionStartTime = new Date().toISOString();
+      
+      isRunning = true;
+      document.getElementById('icon-play').className = 'fa-solid fa-pause';
+      document.getElementById('timer-status').textContent = 'Running';
+      
+      timerInterval = setInterval(() => {
+        timeLeft--;
+        updateTimerDisplay();
+        setProgress((timeLeft / totalTime) * 100);
+        
+        if (timeLeft <= 0) {
+          completeSession();
+        }
+      }, 1000);
+    }
+
+    function pauseTimer() {
+      isRunning = false;
+      clearInterval(timerInterval);
+      document.getElementById('icon-play').className = 'fa-solid fa-play';
+      document.getElementById('timer-status').textContent = 'Paused';
+      document.title = 'Focus Time';
+    }
+
+    function resetTimer() {
+      pauseTimer();
+      setMode(currentMode);
+      sessionStartTime = null;
+    }
+
+    function completeSession() {
+      pauseTimer();
+      const duration = appData.customDurations[currentMode];
+      
+      appData.sessions.push({
+        id: Date.now(),
+        startTime: sessionStartTime || new Date().toISOString(),
+        endTime: new Date().toISOString(),
+        duration: duration,
+        type: currentMode
+      });
+      saveData();
+      
+      if (Notification.permission === "granted") {
+        new Notification("Focus Time", { body: `${currentMode === 'focus' ? 'Focus' : 'Break'} session completed!` });
+      }
+      
+      // Auto-switch logic
+      if (currentMode === 'focus') {
+        setMode('shortBreak');
+      } else {
+        setMode('focus');
+      }
+      
+      // Play a simple beep sound
+      const audio = new AudioContext();
+      const oscillator = audio.createOscillator();
+      const gainNode = audio.createGain();
+      oscillator.connect(gainNode);
+      gainNode.connect(audio.destination);
+      oscillator.frequency.value = 800;
+      gainNode.gain.value = 0.1;
+      oscillator.start();
+      setTimeout(() => oscillator.stop(), 200);
+    }
+
+    function toggleFullscreen() {
+      const elem = document.getElementById('pomodoro-view');
+      if (!document.fullscreenElement) {
+        elem.requestFullscreen().catch(err => console.log(err));
+      } else {
+        document.exitFullscreen();
+      }
+    }
+
+    // --- Statistics Calendar ---
+    let currentCalendarDate = new Date();
+
+    function changeMonth(delta) {
+      currentCalendarDate.setMonth(currentCalendarDate.getMonth() + delta);
+      renderCalendar();
+    }
+
+    function renderCalendar() {
+      const year = currentCalendarDate.getFullYear();
+      const month = currentCalendarDate.getMonth();
+      const firstDay = new Date(year, month, 1).getDay();
+      const daysInMonth = new Date(year, month + 1, 0).getDate();
+      
+      document.getElementById('calendar-month-year').textContent = new Date(year, month).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+      
+      const grid = document.getElementById('calendar-grid');
+      grid.innerHTML = '';
+      
+      for (let i = 0; i < firstDay; i++) {
+        grid.appendChild(document.createElement('div'));
+      }
+      
+      for (let day = 1; day <= daysInMonth; day++) {
+        const date = new Date(year, month, day);
+        const minutes = getTotalMinutesForDay(date);
+        const hours = Math.floor(minutes / 60);
+        const mins = minutes % 60;
+        
+        const cell = document.createElement('div');
+        cell.className = 'border border-gray-200 dark:border-gray-800 rounded-lg p-2 flex flex-col items-center justify-center min-h-[80px] transition-colors hover:bg-gray-50 dark:hover:bg-neutral-800';
+        if (minutes > 0) {
+          cell.classList.add('bg-primary-bg', 'dark:bg-opacity-20');
+        }
+        
+        cell.innerHTML = `
+          <span class="text-sm font-medium text-gray-700 dark:text-gray-300">${day}</span>
+          ${minutes > 0 ? `<span class="text-xs font-bold mt-1" style="color: var(--primary)">${hours > 0 ? hours + 'h ' : ''}${mins}m</span>` : '<span class="text-xs text-gray-400 mt-1">-</span>'}
+        `;
+        grid.appendChild(cell);
+      }
+    }
+
+    // --- Settings ---
+    function loadSettings() {
+      document.getElementById('setting-focus').value = appData.customDurations.focus;
+      document.getElementById('setting-short').value = appData.customDurations.shortBreak;
+      document.getElementById('setting-long').value = appData.customDurations.longBreak;
+    }
+
+    function saveSettings() {
+      appData.customDurations.focus = parseInt(document.getElementById('setting-focus').value) || 25;
+      appData.customDurations.shortBreak = parseInt(document.getElementById('setting-short').value) || 5;
+      appData.customDurations.longBreak = parseInt(document.getElementById('setting-long').value) || 15;
+      saveData();
+      setMode(currentMode); // Reset timer with new durations
+      alert('Settings saved!');
+    }
+
+    function exportData() {
+      const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(appData));
+      const downloadAnchorNode = document.createElement('a');
+      downloadAnchorNode.setAttribute("href", dataStr);
+      downloadAnchorNode.setAttribute("download", "focus_time_backup.json");
+      document.body.appendChild(downloadAnchorNode);
+      downloadAnchorNode.click();
+      downloadAnchorNode.remove();
+    }
+
+    function importData(input) {
+      const file = input.files[0];
+      if (!file) return;
+      
+      const reader = new FileReader();
+      reader.onload = function(event) {
+        try {
+          const imported = JSON.parse(event.target.result);
+          if (imported.sessions && imported.customDurations) {
+            appData = imported;
+            saveData();
+            location.reload();
+          } else {
+            alert("Invalid file format");
+          }
+        } catch (e) {
+          alert("Error reading file");
+        }
+      };
+      reader.readAsText(file);
+    }
+
+    function resetAllData() {
+      if (confirm("Are you sure? This will delete all your study history and settings.")) {
+        localStorage.removeItem('focusTimeData');
+        location.reload();
+      }
+    }
+
+    // --- Service Worker Registration ---
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('sw.js').catch(err => console.log('SW registration failed', err));
+    }
+
+    // Start App
+    init();
+  </script>
+</body>
+</html>
